@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hourglass sealed with a wax dot: the Capsula mark. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#E8B65A"
+        android:pathData="M38,32h32v4h-32z" />
+    <path
+        android:fillColor="#E8B65A"
+        android:pathData="M38,72h32v4h-32z" />
+    <path
+        android:fillColor="#E8B65A"
+        android:pathData="M41,36L67,36L67,40C67,47 59,51 56,54C59,57 67,61 67,68L67,72L41,72L41,68C41,61 49,57 52,54C49,51 41,47 41,40Z" />
+    <path
+        android:fillColor="#12142A"
+        android:pathData="M45,40L63,40C63,45 57,48 54,50.5C51,48 45,45 45,40Z" />
+    <path
+        android:fillColor="#C2475A"
+        android:pathData="M54,64m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+</vector>

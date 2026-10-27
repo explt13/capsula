@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The real theme is applied in Compose (CapsulaTheme). This one only sets the window background
+         so there is no white flash before the first frame. -->
+    <style name="Theme.Capsula" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/night_ink</item>
+    </style>
+</resources>
