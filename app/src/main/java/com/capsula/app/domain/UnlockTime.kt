@@ -5,13 +5,13 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-/** Converts dates coming from the Material 3 DatePicker into unlock timestamps. */
+/// Класс для работы с временем открытия капсулы.
 object UnlockTime {
 
-    /** A capsule with a custom date opens at 09:00 local time on that day. */
+    // Кастомное время открытия капсулы в 9 утра.
     const val CUSTOM_UNLOCK_HOUR = 9
 
-    /** DatePicker returns UTC midnight of the chosen day. */
+    // Преобразует дату из Material 3 DatePicker в время открытия капсулы.
     fun fromPickerDate(utcMidnightMillis: Long, zone: ZoneId = ZoneId.systemDefault()): Long =
         pickerMillisToLocalDate(utcMidnightMillis)
             .atTime(CUSTOM_UNLOCK_HOUR, 0)
@@ -19,7 +19,7 @@ object UnlockTime {
             .toInstant()
             .toEpochMilli()
 
-    /** Only days after today can be chosen. */
+    // Проверяет, является ли выбранная дата в DatePicker допустимой для открытия капсулы (т.е. после сегодняшнего дня).
     fun isSelectablePickerDate(utcMillis: Long, today: LocalDate = LocalDate.now()): Boolean =
         pickerMillisToLocalDate(utcMillis).isAfter(today)
 

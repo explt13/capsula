@@ -1,5 +1,6 @@
 package com.capsula.app.domain
 
+// Класс для работы с временными интервалами.
 object Durations {
     const val SECOND = 1_000L
     const val MINUTE = 60 * SECOND

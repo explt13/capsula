@@ -1,9 +1,6 @@
 package com.capsula.app.data.model
 
-/**
- * A letter to the future self. All times are epoch milliseconds, which keeps the model
- * simple, easy to test and ready to be stored in Room in the second part of the course.
- */
+/// Модель данных для капсулы. Содержит информацию о заголовке, сообщении, настроении при запечатывании, времени создания, времени открытия и размышлениях пользователя.
 data class Capsule(
     val id: Long,
     val title: String,
@@ -16,7 +13,8 @@ data class Capsule(
     val moodAtOpening: Mood? = null,
     val reflection: String? = null,
 ) {
-    /** The status is derived from time, never stored, so it can't get out of sync. */
+
+    // Возвращает статус капсулы в зависимости от текущего времени и состояния открытия.
     fun statusAt(now: Long): CapsuleStatus = when {
         openedAt != null -> CapsuleStatus.OPENED
         now >= unlockAt -> CapsuleStatus.READY
@@ -25,7 +23,7 @@ data class Capsule(
 
     fun remainingMillis(now: Long): Long = (unlockAt - now).coerceAtLeast(0L)
 
-    /** 0f right after sealing, 1f when the capsule can be opened. */
+    // Возвращает прогресс запечатывания капсулы в виде значения от 0 до 1, где 0 означает, что капсула только что была создана, а 1 означает, что капсула готова к открытию.
     fun sealProgress(now: Long): Float {
         val total = (unlockAt - createdAt).coerceAtLeast(1L)
         return ((now - createdAt).toFloat() / total).coerceIn(0f, 1f)
@@ -36,7 +34,7 @@ data class Capsule(
 
 enum class CapsuleStatus { SEALED, READY, OPENED }
 
-/** Everything the user provides when sealing a new capsule. */
+// Модель данных для новой капсулы, которая еще не была добавлена в репозиторий. Используется при создании капсулы пользователем.
 data class NewCapsule(
     val title: String,
     val message: String,

@@ -22,7 +22,7 @@ data class Insights(
     val reflectedCount: Int get() = moodShifts.values.sum()
 }
 
-/** Compares how the user felt when writing a capsule with how they felt when opening it. */
+/// Возвращает изменение настроения пользователя после открытия капсулы.
 fun Capsule.moodShift(): MoodShift? {
     val after = moodAtOpening ?: return null
     return when {
@@ -32,7 +32,7 @@ fun Capsule.moodShift(): MoodShift? {
     }
 }
 
-/** Turns the list of capsules into statistics for the Insights screen. */
+// Класс для вычисления статистики по капсулам.
 object InsightsCalculator {
 
     fun calculate(capsules: List<Capsule>, now: Long): Insights {

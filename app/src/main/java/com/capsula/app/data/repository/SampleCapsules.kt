@@ -7,11 +7,7 @@ import com.capsula.app.domain.Durations.HOUR
 import com.capsula.app.domain.Durations.MINUTE
 import java.util.concurrent.atomic.AtomicLong
 
-/**
- * Demo data so that every state of the app can be shown right after install:
- * one capsule ready to open, one that opens in a few minutes (watch it unlock live),
- * one already opened with a reflection, and one sealed for a year.
- */
+// Вспомогательный объект, который создает список капсул с тестовыми данными. Используется для заполнения InMemoryCapsuleRepository.
 internal object SampleCapsules {
 
     fun create(now: Long, ids: AtomicLong): List<Capsule> = listOf(

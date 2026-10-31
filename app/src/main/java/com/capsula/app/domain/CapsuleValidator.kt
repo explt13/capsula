@@ -12,7 +12,7 @@ data class CapsuleValidation(
         get() = listOf(titleError, messageError, moodError, unlockError).all { it == null }
 }
 
-/** Pure validation rules for a new capsule. No Android dependencies, fully unit-testable. */
+// Валидатор для проверки данных новой капсулы.
 object CapsuleValidator {
     const val TITLE_MAX_LENGTH = 60
     const val MESSAGE_MIN_LENGTH = 10

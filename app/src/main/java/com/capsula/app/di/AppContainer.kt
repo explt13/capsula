@@ -7,11 +7,7 @@ import com.capsula.app.domain.TimeProvider
 import com.capsula.app.domain.tickerFlow
 import kotlinx.coroutines.flow.Flow
 
-/**
- * Manual dependency injection: one place that creates app-wide singletons.
- * Created once in [com.capsula.app.CapsulaApplication], so it outlives activities
- * and survives configuration changes.
- */
+// Устанавливает зависимости для всего приложения.
 class AppContainer(
     val timeProvider: TimeProvider = SystemTimeProvider,
 ) {

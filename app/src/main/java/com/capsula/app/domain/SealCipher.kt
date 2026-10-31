@@ -1,12 +1,6 @@
 package com.capsula.app.domain
 
-/**
- * Turns a letter into "sealed" glyphs. It is not real encryption (the text never leaves the
- * device): it shows the *shape* of your words while hiding the content. Whitespace is kept,
- * so paragraphs and word lengths are still visible.
- *
- * The [salt] changes every second on the detail screen, so the seal visibly "shimmers".
- */
+// / Класс для шифрования текста капсулы с использованием глифов.
 object SealCipher {
 
     private const val GLYPHS = "░▒▓◆◇◈●○◐◑◒◓※§¤∆∑Ω≈#@%&"
@@ -22,10 +16,7 @@ object SealCipher {
         }
     }
 
-    /**
-     * Partially decoded text: the first [revealedCount] characters are real, the rest are glyphs.
-     * Used by the opening animation.
-     */
+    // Возвращает частично раскрытый текст капсулы, где первые revealedCount символов остаются видимыми, а остальные заменяются глифами.
     fun partiallyRevealed(text: String, revealedCount: Int, salt: Int): String = buildString(text.length) {
         text.forEachIndexed { index, char ->
             append(

@@ -5,11 +5,7 @@ import com.capsula.app.data.model.Mood
 import com.capsula.app.data.model.NewCapsule
 import kotlinx.coroutines.flow.Flow
 
-/**
- * Single source of truth for capsules. ViewModels depend on this interface only, so the
- * in-memory implementation can be swapped for Room in part 2 without touching the UI.
- * Write operations are `suspend` for the same reason: a database call is asynchronous.
- */
+// Интерфейс для репозитория капсул. Определяет методы для наблюдения, добавления, открытия, сохранения размышлений и удаления капсул.
 interface CapsuleRepository {
     val capsules: Flow<List<Capsule>>
 

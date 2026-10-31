@@ -10,10 +10,7 @@ object TimeFormatter {
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH)
     private val dateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
-    /**
-     * Live countdown text: "04:59", "02:15:09" or "12d 03h 10m 05s".
-     * Seconds are rounded up so the timer never shows 00:00 while the capsule is still sealed.
-     */
+    // функция для форматирования оставшегося времени до открытия капсулы в виде строки "дд чч мм сс" или "мм:сс" в зависимости от оставшегося времени.
     fun countdown(remainingMillis: Long): String {
         if (remainingMillis <= 0L) return "00:00"
         val totalSeconds = (remainingMillis + 999) / 1_000
@@ -28,7 +25,7 @@ object TimeFormatter {
         }
     }
 
-    /** Rough, human friendly duration: "3 days", "1 month", "2 years". */
+    // функция для форматирования длительности в человекочитаемый вид, например "2 days", "3 hours", "5 minutes" и т.д.
     fun humanDuration(millis: Long): String {
         val safe = millis.coerceAtLeast(0L)
         val minutes = safe / Durations.MINUTE

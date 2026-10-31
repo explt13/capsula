@@ -12,13 +12,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import java.util.concurrent.atomic.AtomicLong
 
-/**
- * Keeps capsules in a [MutableStateFlow]. Every change produces a new immutable list,
- * which automatically reaches every screen that observes [capsules].
- *
- * Data lives as long as the app process (it survives rotation and navigation).
- * Persistent storage (Room) is planned for part 2.
- */
+// Простая реализация CapsuleRepository, которая хранит капсулы в памяти. Используется для тестирования и демонстрации.
 class InMemoryCapsuleRepository(
     private val timeProvider: TimeProvider,
     seedSampleData: Boolean = false,
