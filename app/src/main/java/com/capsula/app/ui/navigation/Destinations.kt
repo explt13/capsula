@@ -5,7 +5,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.graphics.vector.ImageVector
 
-/** All routes of the app in one place. */
+// Определяет маршруты навигации в приложении Capsula, включая экран Vault, Insights, создание капсулы и детали капсулы.
 sealed class Destination(val route: String) {
     data object Vault : Destination("vault")
     data object Insights : Destination("insights")
@@ -16,7 +16,7 @@ sealed class Destination(val route: String) {
     }
 }
 
-/** Destinations reachable from the bottom navigation bar. */
+// Определяет верхнеуровневые пункты назначения в приложении Capsula, включая Vault и Insights, с их маршрутами, метками и значками.
 enum class TopLevelDestination(val route: String, val label: String, val icon: ImageVector) {
     VAULT(Destination.Vault.route, "Vault", Icons.Filled.Lock),
     INSIGHTS(Destination.Insights.route, "Insights", Icons.Filled.Star),

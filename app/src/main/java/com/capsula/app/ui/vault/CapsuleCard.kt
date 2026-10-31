@@ -112,7 +112,7 @@ fun CapsuleCard(
     }
 }
 
-/** A slow, gentle pulse that draws the eye to capsules that can be opened. */
+// Показывает анимированное свечение для капсул, которые готовы к открытию.
 @Composable
 private fun readyGlowColor(): Color {
     val transition = rememberInfiniteTransition(label = "readyGlow")

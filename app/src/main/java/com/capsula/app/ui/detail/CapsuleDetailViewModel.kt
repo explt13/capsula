@@ -27,15 +27,12 @@ class CapsuleDetailViewModel(
     private val timeProvider: TimeProvider,
 ) : ViewModel() {
 
-    /** Navigation Compose puts route arguments into the SavedStateHandle automatically. */
+    // Необходимо получить идентификатор капсулы из аргументов навигации. Если идентификатор отсутствует, выбрасывается исключение.
     private val capsuleId: Long = checkNotNull(savedStateHandle.get<Long>(Destination.Detail.ARG_CAPSULE_ID)) {
         "Capsule id is missing from navigation arguments"
     }
 
-    /**
-     * Because the current time is part of the combination, a sealed capsule turns into
-     * a ready one on screen at the exact second its countdown ends, without any refresh.
-     */
+    // UI-состояние для экрана деталей капсулы. Обновляется при изменении капсулы или времени.
     val uiState: StateFlow<CapsuleDetailUiState> = combine(
         repository.observeCapsule(capsuleId),
         ticker,
@@ -50,7 +47,7 @@ class CapsuleDetailViewModel(
     private val _events = Channel<CapsuleDetailEvent>(Channel.BUFFERED)
     val events: Flow<CapsuleDetailEvent> = _events.receiveAsFlow()
 
-    /** Called when the wax seal is broken. The time check is repeated here: the UI is never trusted. */
+    // Открывает капсулу, если она готова к открытию. Если капсула уже открыта или не готова, ничего не происходит.
     fun openCapsule() {
         viewModelScope.launch {
             val now = timeProvider.now()

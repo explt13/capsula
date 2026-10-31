@@ -15,10 +15,7 @@ import com.capsula.app.ui.navigation.Destination
 import com.capsula.app.ui.navigation.TopLevelDestination
 import com.capsula.app.ui.vault.VaultScreen
 
-/**
- * Navigation graph. Screens never touch the NavController themselves: they receive
- * plain lambdas (onCapsuleClick, onBack...). This keeps screens reusable and previewable.
- */
+// Основной Composable для приложения Capsula. Определяет навигацию между экранами Vault, Insights, создания капсулы и деталей капсулы.
 @Composable
 fun CapsulaApp(navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = Destination.Vault.route) {
@@ -42,7 +39,7 @@ fun CapsulaApp(navController: NavHostController = rememberNavController()) {
             CreateCapsuleScreen(
                 onBack = { navController.navigateUp() },
                 onSealed = { id ->
-                    // Show the freshly sealed capsule; Back from there returns to the vault, not the form.
+                    // После успешного создания капсулы, навигация к экрану деталей капсулы с удалением экрана создания из стека.
                     navController.navigate(Destination.Detail.createRoute(id)) {
                         popUpTo(Destination.Create.route) { inclusive = true }
                     }
@@ -56,13 +53,13 @@ fun CapsulaApp(navController: NavHostController = rememberNavController()) {
                 navArgument(Destination.Detail.ARG_CAPSULE_ID) { type = NavType.LongType },
             ),
         ) {
-            // The capsule id is read by CapsuleDetailViewModel from its SavedStateHandle.
+            // Экран деталей капсулы. Отображает информацию о выбранной капсуле и позволяет открыть её, если она готова.
             CapsuleDetailScreen(onBack = { navController.navigateUp() })
         }
     }
 }
 
-/** Standard bottom-bar navigation: one copy of each tab, tab state is saved and restored. */
+// Навигация к верхнеуровневому пункту назначения с сохранением состояния и удалением предыдущих экранов из стека.
 private fun NavHostController.navigateToTab(destination: TopLevelDestination) {
     navigate(destination.route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }

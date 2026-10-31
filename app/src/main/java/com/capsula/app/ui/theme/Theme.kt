@@ -74,10 +74,7 @@ private val CapsulaShapes = Shapes(
     large = RoundedCornerShape(24.dp),
 )
 
-/**
- * Dynamic color is intentionally off: the night-sky palette is part of the app's identity
- * and must look the same on every device.
- */
+// Тема приложения Capsula, определяющая цветовую схему, типографику и формы для UI-компонентов.
 @Composable
 fun CapsulaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

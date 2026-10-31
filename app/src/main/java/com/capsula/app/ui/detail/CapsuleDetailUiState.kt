@@ -2,10 +2,7 @@ package com.capsula.app.ui.detail
 
 import com.capsula.app.data.model.Capsule
 
-/**
- * Each state of a capsule gets its own type, so the UI can't show, for example,
- * the letter text of a capsule that is still sealed.
- */
+// Представляет состояние UI для экрана деталей капсулы, включая загрузку, отсутствие капсулы, запечатанную, готовую и открытую капсулу.
 sealed interface CapsuleDetailUiState {
     data object Loading : CapsuleDetailUiState
 
@@ -15,7 +12,7 @@ sealed interface CapsuleDetailUiState {
         val capsule: Capsule,
         val remainingMillis: Long,
         val progress: Float,
-        /** The letter rendered as seal glyphs. Changes every second. */
+        // Зашифрованный текст размышлений, который будет расшифрован при открытии капсулы.
         val cipherText: String,
     ) : CapsuleDetailUiState
 

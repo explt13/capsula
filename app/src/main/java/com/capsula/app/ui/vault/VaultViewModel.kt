@@ -11,12 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
-/**
- * Combines three sources into one UI state:
- *  1. the list of capsules (repository),
- *  2. the current time (ticker, every second) -> live countdowns,
- *  3. the selected filter (SavedStateHandle) -> survives rotation and process death.
- */
+// ViewModel для экрана Vault. Отвечает за управление состоянием UI и взаимодействие с репозиторием капсул.
 class VaultViewModel(
     private val savedStateHandle: SavedStateHandle,
     repository: CapsuleRepository,
@@ -40,8 +35,7 @@ class VaultViewModel(
         )
     }.stateIn(
         scope = viewModelScope,
-        // Keep the upstream (and the ticker) alive 5 s after the UI stops collecting,
-        // so a rotation does not restart it, but a backgrounded app stops ticking.
+        // Подписка на поток данных будет активной, пока есть подписчики, и будет оставаться активной в течение 5 секунд после того, как последний подписчик отпишется.
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = VaultUiState(),
     )
@@ -53,7 +47,7 @@ class VaultViewModel(
     private companion object {
         const val KEY_FILTER = "vault_filter"
 
-        /** Ready first (oldest first), then sealed (soonest first), then opened (latest first). */
+        // Определяет порядок сортировки капсул в UI: сначала READY, затем SEALED, затем OPENED.
         val VAULT_ORDER = compareBy<CapsuleItemUi>(
             { item ->
                 when (item.status) {

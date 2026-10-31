@@ -3,7 +3,7 @@ package com.capsula.app.ui.vault
 import com.capsula.app.data.model.Capsule
 import com.capsula.app.data.model.CapsuleStatus
 
-/** A capsule prepared for display at a specific moment in time. */
+// Представление капсулы в UI, включая её статус, оставшееся время до открытия и прогресс запечатывания.
 data class CapsuleItemUi(
     val capsule: Capsule,
     val status: CapsuleStatus,

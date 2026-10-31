@@ -42,7 +42,7 @@ import com.capsula.app.ui.components.EmptyState
 import com.capsula.app.ui.navigation.TopLevelDestination
 import com.capsula.app.ui.theme.CapsulaTheme
 
-/** Stateful entry point: gets the ViewModel and hands plain state + callbacks to [VaultContent]. */
+// Экран Vault, отображающий список капсул, фильтры и состояние пустого экрана.
 @Composable
 fun VaultScreen(
     onCapsuleClick: (Long) -> Unit,
@@ -60,7 +60,7 @@ fun VaultScreen(
     )
 }
 
-/** Stateless UI (state hoisting): everything it shows comes from parameters. */
+// UI для экрана Vault. Отвечает за отображение списка капсул, фильтров и состояния пустого экрана.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VaultContent(

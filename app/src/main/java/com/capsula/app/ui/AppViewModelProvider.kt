@@ -11,10 +11,7 @@ import com.capsula.app.ui.detail.CapsuleDetailViewModel
 import com.capsula.app.ui.insights.InsightsViewModel
 import com.capsula.app.ui.vault.VaultViewModel
 
-/**
- * Factory for every ViewModel in the app. It takes dependencies from [com.capsula.app.di.AppContainer]
- * and gives each ViewModel a SavedStateHandle (which also contains navigation arguments).
- */
+// Провайдер фабрики ViewModel для приложения Capsula. Обеспечивает создание экземпляров ViewModel с необходимыми зависимостями.
 object AppViewModelProvider {
     val Factory = viewModelFactory {
         initializer {

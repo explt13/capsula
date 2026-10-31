@@ -17,15 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
-/**
- * Owns the "seal a capsule" form.
- *
- * - The UI state is a [StateFlow] updated synchronously on every keystroke (no async hop),
- *   which keeps text fields responsive.
- * - Every field is also written to [SavedStateHandle], so the draft survives not only rotation
- *   (the ViewModel itself survives that) but also the system killing the app in the background.
- * - Navigation after saving is a one-time event sent through a [Channel].
- */
+// ViewModel для экрана создания капсулы. Отвечает за управление состоянием UI, валидацию формы и взаимодействие с репозиторием капсул.
 class CreateCapsuleViewModel(
     private val savedStateHandle: SavedStateHandle,
     private val repository: CapsuleRepository,
