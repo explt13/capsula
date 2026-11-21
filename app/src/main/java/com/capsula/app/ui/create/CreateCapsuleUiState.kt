@@ -1,5 +1,6 @@
 package com.capsula.app.ui.create
 
+import com.capsula.app.data.model.CapsuleContent
 import com.capsula.app.data.model.Mood
 import com.capsula.app.domain.Durations
 
@@ -13,6 +14,12 @@ enum class UnlockPreset(val label: String, val durationMillis: Long?) {
     CUSTOM("Pick a date", null),
 }
 
+// Новое письмо или продолжение черновика: экран и ViewModel одни и те же.
+enum class FormMode { CREATE, EDIT_DRAFT }
+
+// Какие ошибки показывать: после «Save draft» проверяется только заголовок, после «Seal» — всё.
+enum class ErrorMode { NONE, DRAFT, SEAL }
+
 /** Raw user input. */
 data class CreateCapsuleForm(
     val title: String = "",
@@ -22,24 +29,37 @@ data class CreateCapsuleForm(
     val preset: UnlockPreset = UnlockPreset.ONE_MONTH,
     /** UTC midnight of the day chosen in the DatePicker (only for [UnlockPreset.CUSTOM]). */
     val customDateMillis: Long? = null,
-)
+) {
+    fun toContent(): CapsuleContent = CapsuleContent(
+        title = title,
+        message = message,
+        questionForFuture = question,
+        mood = mood,
+    )
+}
 
 /** Input plus everything derived from it: unlock preview, validation errors, saving flag. */
 data class CreateCapsuleUiState(
+    val mode: FormMode = FormMode.CREATE,
+    val isLoading: Boolean = false,
     val form: CreateCapsuleForm = CreateCapsuleForm(),
+    // Содержимое формы на момент открытия: с ним сравниваем, есть ли несохранённые изменения.
+    val initialContent: CapsuleContent = CreateCapsuleForm().toContent(),
     val unlockAtPreview: Long? = null,
     val titleError: String? = null,
     val messageError: String? = null,
     val moodError: String? = null,
     val unlockError: String? = null,
-    val showErrors: Boolean = false,
     val isSaving: Boolean = false,
 ) {
     /** True when leaving the screen would throw away something the user typed. */
     val isDirty: Boolean
-        get() = form.title.isNotBlank() || form.message.isNotBlank() || form.question.isNotBlank()
+        get() = !isLoading && form.toContent() != initialContent
 }
 
 sealed interface CreateCapsuleEvent {
-    data class Sealed(val capsuleId: Long) : CreateCapsuleEvent
+    data class Saved(val capsuleId: Long, val sealed: Boolean) : CreateCapsuleEvent
+
+    // Черновик не найден или уже запечатан: редактировать нечего.
+    data object NotEditable : CreateCapsuleEvent
 }

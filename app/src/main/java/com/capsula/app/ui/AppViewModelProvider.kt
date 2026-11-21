@@ -9,6 +9,7 @@ import com.capsula.app.CapsulaApplication
 import com.capsula.app.ui.create.CreateCapsuleViewModel
 import com.capsula.app.ui.detail.CapsuleDetailViewModel
 import com.capsula.app.ui.insights.InsightsViewModel
+import com.capsula.app.ui.trash.TrashViewModel
 import com.capsula.app.ui.vault.VaultViewModel
 
 // Провайдер фабрики ViewModel для приложения Capsula. Обеспечивает создание экземпляров ViewModel с необходимыми зависимостями.
@@ -34,6 +35,12 @@ object AppViewModelProvider {
                 repository = capsulaApp().container.capsuleRepository,
                 ticker = capsulaApp().container.ticker,
                 timeProvider = capsulaApp().container.timeProvider,
+            )
+        }
+        initializer {
+            TrashViewModel(
+                repository = capsulaApp().container.capsuleRepository,
+                ticker = capsulaApp().container.ticker,
             )
         }
         initializer {

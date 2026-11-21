@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    // KSP генерирует код Room (реализации DAO и базы данных) во время сборки.
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -12,8 +14,8 @@ android {
         applicationId = "com.capsula.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     buildTypes {
@@ -51,6 +53,11 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.core)
     implementation(libs.androidx.navigation.compose)
+
+    // Room: локальная база данных SQLite.
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     debugImplementation(libs.androidx.ui.tooling)
 

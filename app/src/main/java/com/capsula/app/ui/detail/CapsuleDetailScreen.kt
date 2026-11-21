@@ -18,31 +18,39 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,12 +64,18 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.capsula.app.data.model.Capsule
+import com.capsula.app.data.model.CapsuleEvent
+import com.capsula.app.data.model.CapsuleEventType
 import com.capsula.app.data.model.Mood
+import com.capsula.app.domain.CapsuleRules
+import com.capsula.app.domain.CapsuleValidator
 import com.capsula.app.domain.Durations
 import com.capsula.app.domain.MoodShift
+import com.capsula.app.domain.PostponeOption
 import com.capsula.app.domain.TimeFormatter
 import com.capsula.app.domain.moodShift
 import com.capsula.app.ui.AppViewModelProvider
+import com.capsula.app.ui.components.CapsuleTimeline
 import com.capsula.app.ui.components.CountdownRing
 import com.capsula.app.ui.components.DecodingText
 import com.capsula.app.ui.components.EmptyState
@@ -71,19 +85,26 @@ import com.capsula.app.ui.components.MoodSelector
 import com.capsula.app.ui.components.ObserveAsEvents
 import com.capsula.app.ui.components.SectionTitle
 import com.capsula.app.ui.components.WaxSealButton
+import com.capsula.app.ui.navigation.TrashedCapsule
 import com.capsula.app.ui.theme.CapsulaTheme
 import com.capsula.app.ui.theme.LetterTextStyle
+import kotlinx.coroutines.launch
 
 @Composable
 fun CapsuleDetailScreen(
     onBack: () -> Unit,
+    onEditDraft: (Long) -> Unit,
+    onTrashed: (TrashedCapsule) -> Unit,
     viewModel: CapsuleDetailViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
-            CapsuleDetailEvent.Deleted -> onBack()
+            is CapsuleDetailEvent.Trashed -> onTrashed(TrashedCapsule(event.capsuleId, event.title))
+            is CapsuleDetailEvent.Message -> scope.launch { snackbarHostState.showSnackbar(event.text) }
         }
     }
 
@@ -94,41 +115,70 @@ fun CapsuleDetailScreen(
     CapsuleDetailContent(
         uiState = uiState,
         animateReveal = justOpened,
-        onBack = onBack,
-        onSealBroken = {
-            justOpened = true
-            viewModel.openCapsule()
-        },
-        onSaveReflection = viewModel::saveReflection,
-        onDelete = viewModel::deleteCapsule,
+        snackbarHostState = snackbarHostState,
+        actions = DetailActions(
+            onBack = onBack,
+            onEditDraft = onEditDraft,
+            onSealBroken = {
+                justOpened = true
+                viewModel.openCapsule()
+            },
+            onSaveReflection = viewModel::saveReflection,
+            onPostpone = viewModel::postpone,
+            onRename = viewModel::rename,
+            onMoveToTrash = viewModel::moveToTrash,
+        ),
     )
 }
+
+// Все действия экрана одним объектом, чтобы не передавать по 8 лямбд в каждую функцию.
+data class DetailActions(
+    val onBack: () -> Unit = {},
+    val onEditDraft: (Long) -> Unit = {},
+    val onSealBroken: () -> Unit = {},
+    val onSaveReflection: (Mood, String) -> Unit = { _, _ -> },
+    val onPostpone: (PostponeOption) -> Unit = {},
+    val onRename: (String) -> Unit = {},
+    val onMoveToTrash: () -> Unit = {},
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CapsuleDetailContent(
     uiState: CapsuleDetailUiState,
     animateReveal: Boolean,
-    onBack: () -> Unit,
-    onSealBroken: () -> Unit,
-    onSaveReflection: (Mood, String) -> Unit,
-    onDelete: () -> Unit,
+    snackbarHostState: SnackbarHostState,
+    actions: DetailActions,
 ) {
-    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    // Какие диалоги открыты — чистое UI-состояние, поэтому rememberSaveable, а не ViewModel.
+    var showTrashDialog by rememberSaveable { mutableStateOf(false) }
+    var showRenameDialog by rememberSaveable { mutableStateOf(false) }
+    var showPostponeDialog by rememberSaveable { mutableStateOf(false) }
+    val capsule = uiState.capsuleOrNull
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = actions.onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    if (uiState.capsuleOrNull != null) {
-                        IconButton(onClick = { showDeleteDialog = true }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Delete capsule")
+                    if (capsule != null) {
+                        if (uiState is CapsuleDetailUiState.Draft) {
+                            IconButton(onClick = { actions.onEditDraft(capsule.id) }) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Edit draft")
+                            }
+                        } else {
+                            IconButton(onClick = { showRenameDialog = true }) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Rename capsule")
+                            }
+                        }
+                        IconButton(onClick = { showTrashDialog = true }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Move to trash")
                         }
                     }
                 },
@@ -154,39 +204,101 @@ fun CapsuleDetailContent(
                 }
                 CapsuleDetailUiState.NotFound -> EmptyState(
                     emoji = "🕳️",
-                    title = "This capsule no longer exists",
-                    body = "It may have been deleted.",
-                    actionLabel = "Back to the vault",
-                    onAction = onBack,
+                    title = "This capsule is not here",
+                    body = "It was deleted or moved to the trash.",
+                    actionLabel = "Back",
+                    onAction = actions.onBack,
                 )
-                is CapsuleDetailUiState.Sealed -> SealedContent(state)
-                is CapsuleDetailUiState.Ready -> ReadyContent(state, onSealBroken)
-                is CapsuleDetailUiState.Opened -> OpenedContent(state, animateReveal, onSaveReflection)
+                is CapsuleDetailUiState.Draft -> DraftContent(state, onEdit = { actions.onEditDraft(state.capsule.id) })
+                is CapsuleDetailUiState.Sealed -> SealedContent(state, onPostponeClick = { showPostponeDialog = true })
+                is CapsuleDetailUiState.Ready -> ReadyContent(
+                    state = state,
+                    onSealBroken = actions.onSealBroken,
+                    onPostponeClick = { showPostponeDialog = true },
+                )
+                is CapsuleDetailUiState.Opened -> OpenedContent(state, animateReveal, actions.onSaveReflection)
             }
         }
     }
 
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-            title = { Text("Delete this capsule?") },
-            text = { Text("The letter will be gone for good, including your reply.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDeleteDialog = false
-                    onDelete()
-                }) { Text("Delete") }
+    if (showTrashDialog && capsule != null) {
+        MoveToTrashDialog(
+            title = capsule.title,
+            onConfirm = {
+                showTrashDialog = false
+                actions.onMoveToTrash()
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            onDismiss = { showTrashDialog = false },
+        )
+    }
+    if (showRenameDialog && capsule != null) {
+        RenameDialog(
+            currentTitle = capsule.title,
+            onConfirm = { title ->
+                showRenameDialog = false
+                actions.onRename(title)
             },
+            onDismiss = { showRenameDialog = false },
+        )
+    }
+    val postponeState = when (uiState) {
+        is CapsuleDetailUiState.Sealed -> uiState.postpone
+        is CapsuleDetailUiState.Ready -> uiState.postpone
+        else -> null
+    }
+    if (showPostponeDialog && postponeState != null) {
+        PostponeDialog(
+            state = postponeState,
+            onConfirm = { option ->
+                showPostponeDialog = false
+                actions.onPostpone(option)
+            },
+            onDismiss = { showPostponeDialog = false },
         )
     }
 }
 
 @Composable
-private fun SealedContent(state: CapsuleDetailUiState.Sealed) {
+private fun DraftContent(state: CapsuleDetailUiState.Draft, onEdit: () -> Unit) {
+    val capsule = state.capsule
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column {
+            Text(capsule.title, style = MaterialTheme.typography.headlineMedium)
+            Text(
+                text = "Draft, not sealed yet. Last edited ${TimeFormatter.dateTime(capsule.updatedAt)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        LetterCard {
+            Text(
+                text = capsule.message.ifBlank { "The page is still empty." },
+                style = LetterTextStyle,
+            )
+        }
+        capsule.questionForFuture?.let { QuestionCard(label = "You plan to ask", question = it) }
+        Text(
+            text = "A draft can be changed as often as you like. When it's ready, seal it and choose when it opens.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(onClick = onEdit, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Continue writing")
+        }
+        HistorySection(state.history)
+    }
+}
+
+@Composable
+private fun SealedContent(state: CapsuleDetailUiState.Sealed, onPostponeClick: () -> Unit) {
     val capsule = state.capsule
     Column(
         modifier = Modifier
@@ -216,18 +328,19 @@ private fun SealedContent(state: CapsuleDetailUiState.Sealed) {
         Text(capsule.title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Sealed on ${TimeFormatter.dateTime(capsule.createdAt)}, feeling " +
-                "${capsule.moodAtSealing.label.lowercase()} ${capsule.moodAtSealing.emoji}",
+            text = "Sealed on ${TimeFormatter.dateTime(capsule.sealedAt ?: capsule.createdAt)}${feelingSuffix(capsule.moodAtSealing)}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = "Opens on ${TimeFormatter.dateTime(capsule.unlockAt)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-        )
+        capsule.unlockAt?.let { unlockAt ->
+            Text(
+                text = "Opens on ${TimeFormatter.dateTime(unlockAt)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+            )
+        }
         Spacer(Modifier.height(24.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -247,12 +360,29 @@ private fun SealedContent(state: CapsuleDetailUiState.Sealed) {
                 )
             }
         }
+        Spacer(Modifier.height(16.dp))
+        PostponeButton(state.postpone, onPostponeClick)
+        Spacer(Modifier.height(8.dp))
+        HistorySection(state.history)
         Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun ReadyContent(state: CapsuleDetailUiState.Ready, onSealBroken: () -> Unit) {
+private fun PostponeButton(postpone: PostponeState, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, enabled = postpone.allowed, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(if (postpone.allowed) "Postpone opening (${postpone.left} left)" else "No postponements left")
+    }
+}
+
+@Composable
+private fun ReadyContent(
+    state: CapsuleDetailUiState.Ready,
+    onSealBroken: () -> Unit,
+    onPostponeClick: () -> Unit,
+) {
     val capsule = state.capsule
     Column(
         modifier = Modifier
@@ -260,8 +390,8 @@ private fun ReadyContent(state: CapsuleDetailUiState.Ready, onSealBroken: () -> 
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
+        Spacer(Modifier.height(16.dp))
         Text("It's time.", style = MaterialTheme.typography.displaySmall, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
         Text(
@@ -273,14 +403,20 @@ private fun ReadyContent(state: CapsuleDetailUiState.Ready, onSealBroken: () -> 
         WaxSealButton(onBroken = onSealBroken)
         Spacer(Modifier.height(20.dp))
         Text("Press and hold the seal to break it", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
         Text(
-            text = "Written on ${TimeFormatter.date(capsule.createdAt)}, " +
-                "while feeling ${capsule.moodAtSealing.label.lowercase()} ${capsule.moodAtSealing.emoji}",
+            text = "Written on ${TimeFormatter.date(capsule.sealedAt ?: capsule.createdAt)}${feelingSuffix(capsule.moodAtSealing)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        if (state.postpone.allowed) {
+            TextButton(onClick = onPostponeClick) {
+                Text("Not ready yet? Postpone (${state.postpone.left} left)")
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        HistorySection(state.history)
     }
 }
 
@@ -291,6 +427,8 @@ private fun OpenedContent(
     onSaveReflection: (Mood, String) -> Unit,
 ) {
     val capsule = state.capsule
+    // Режим редактирования ответа — локальное UI-состояние.
+    var editingReply by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -302,8 +440,8 @@ private fun OpenedContent(
         Column {
             Text(capsule.title, style = MaterialTheme.typography.headlineMedium)
             Text(
-                text = "Written ${TimeFormatter.date(capsule.createdAt)}, opened " +
-                    TimeFormatter.date(capsule.openedAt ?: capsule.unlockAt),
+                text = "Written ${TimeFormatter.date(capsule.sealedAt ?: capsule.createdAt)}, opened " +
+                    TimeFormatter.date(capsule.openedAt ?: capsule.updatedAt),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -313,30 +451,54 @@ private fun OpenedContent(
             DecodingText(text = capsule.message, animate = animateReveal, style = LetterTextStyle)
         }
 
-        capsule.questionForFuture?.let { question ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                ),
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Past you asked", style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.height(4.dp))
-                    Text(question, style = LetterTextStyle.copy(fontStyle = FontStyle.Italic))
-                }
-            }
-        }
+        capsule.questionForFuture?.let { QuestionCard(label = "Past you asked", question = it) }
 
         ThenAndNowCard(capsule = capsule, sealedForMillis = state.sealedForMillis)
 
-        if (capsule.hasReflection) {
-            ReflectionCard(capsule)
+        if (capsule.hasReflection && !editingReply) {
+            ReflectionCard(capsule, onEdit = { editingReply = true })
         } else {
-            ReflectionForm(onSave = onSaveReflection)
+            ReflectionForm(
+                initialMood = capsule.moodAtOpening,
+                initialReply = capsule.reflection.orEmpty(),
+                isEdit = capsule.hasReflection,
+                onSave = { mood, reply ->
+                    editingReply = false
+                    onSaveReflection(mood, reply)
+                },
+                onCancel = { editingReply = false },
+            )
         }
+        HistorySection(state.history)
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun HistorySection(history: List<CapsuleEvent>) {
+    if (history.isEmpty()) return
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        SectionTitle("History")
+        Spacer(Modifier.height(8.dp))
+        CapsuleTimeline(events = history)
+    }
+}
+
+@Composable
+private fun QuestionCard(label: String, question: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        ),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(4.dp))
+            Text(question, style = LetterTextStyle.copy(fontStyle = FontStyle.Italic))
+        }
     }
 }
 
@@ -346,7 +508,7 @@ private fun ThenAndNowCard(capsule: Capsule, sealedForMillis: Long) {
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 MoodColumn(label = "Then", mood = capsule.moodAtSealing)
                 Icon(
@@ -364,7 +526,8 @@ private fun ThenAndNowCard(capsule: Capsule, sealedForMillis: Long) {
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = "Sealed for ${TimeFormatter.humanDuration(sealedForMillis)}",
+                text = "Sealed for ${TimeFormatter.humanDuration(sealedForMillis)}" +
+                    if (capsule.postponeCount > 0) ", postponed ${capsule.postponeCount}×" else "",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -388,41 +551,66 @@ private fun moodShiftMessage(shift: MoodShift?): String = when (shift) {
     MoodShift.WORSE -> "Harder times now. Past you was rooting for you."
 }
 
+private fun feelingSuffix(mood: Mood?): String =
+    mood?.let { ", feeling ${it.label.lowercase()} ${it.emoji}" }.orEmpty()
+
 @Composable
-private fun ReflectionForm(onSave: (Mood, String) -> Unit) {
+private fun ReflectionForm(
+    initialMood: Mood?,
+    initialReply: String,
+    isEdit: Boolean,
+    onSave: (Mood, String) -> Unit,
+    onCancel: () -> Unit,
+) {
     // Local UI state until the user commits it; rememberSaveable keeps it through rotation.
-    var mood by rememberSaveable { mutableStateOf<Mood?>(null) }
-    var reply by rememberSaveable { mutableStateOf("") }
+    var mood by rememberSaveable { mutableStateOf(initialMood) }
+    var reply by rememberSaveable { mutableStateOf(initialReply) }
+    val error = CapsuleValidator.replyError(mood, reply)
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionTitle("Reply to your past self")
+        SectionTitle(if (isEdit) "Edit your reply" else "Reply to your past self")
         MoodSelector(selected = mood, onSelect = { mood = it })
         OutlinedTextField(
             value = reply,
-            onValueChange = { reply = it.take(1_000) },
+            onValueChange = { reply = it.take(CapsuleValidator.REPLY_MAX_LENGTH) },
             label = { Text("What would you tell them? (optional)") },
             minLines = 3,
             textStyle = LetterTextStyle,
+            supportingText = { Text("${reply.length}/${CapsuleValidator.REPLY_MAX_LENGTH}") },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             modifier = Modifier.fillMaxWidth(),
         )
-        Button(
-            onClick = { mood?.let { onSave(it, reply) } },
-            enabled = mood != null,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Save reply") }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (isEdit) {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
+            }
+            Button(
+                onClick = { mood?.let { onSave(it, reply) } },
+                enabled = error == null,
+                modifier = Modifier.weight(1f),
+            ) { Text(if (isEdit) "Save changes" else "Save reply") }
+        }
+        if (mood == null) {
+            Text(
+                text = "Pick how you feel now to save the reply.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
 @Composable
-private fun ReflectionCard(capsule: Capsule) {
+private fun ReflectionCard(capsule: Capsule, onEdit: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("Your reply", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Your reply", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                TextButton(onClick = onEdit) { Text("Edit reply") }
+            }
             Text(
                 text = capsule.reflection ?: "No words, just a feeling: ${capsule.moodAtOpening?.emoji.orEmpty()}",
                 style = LetterTextStyle.copy(fontSize = 16.sp, lineHeight = 25.sp),
@@ -431,18 +619,28 @@ private fun ReflectionCard(capsule: Capsule) {
     }
 }
 
+private fun previewCapsule(now: Long) = Capsule(
+    id = 1, title = "Graduation day", message = "If you're reading this, you made it.", questionForFuture = null,
+    moodAtSealing = Mood.GREAT, createdAt = now - 5 * Durations.DAY, updatedAt = now - 5 * Durations.DAY,
+    sealedAt = now - 5 * Durations.DAY, unlockAt = now + 360 * Durations.DAY,
+)
+
 @Preview(showSystemUi = true)
 @Composable
 private fun SealedPreview() {
     val now = 1_000_000_000_000L
-    val capsule = Capsule(
-        1, "Graduation day", "If you're reading this, you made it.", null, Mood.GREAT,
-        now - 5 * Durations.DAY, now + 360 * Durations.DAY,
-    )
+    val capsule = previewCapsule(now)
+    val history = listOf(CapsuleEvent(1, 1, CapsuleEventType.SEALED, now - 5 * Durations.DAY, "Opens on 1 May 2027"))
     CapsulaTheme(darkTheme = true) {
         CapsuleDetailContent(
-            uiState = CapsuleDetailUiState.Sealed(capsule, 360 * Durations.DAY, 0.02f, "◆▒░ ※§¤∆ ≈#@%&"),
-            animateReveal = false, onBack = {}, onSealBroken = {}, onSaveReflection = { _, _ -> }, onDelete = {},
+            uiState = CapsuleDetailUiState.Sealed(
+                capsule = capsule, history = history, remainingMillis = 360 * Durations.DAY, progress = 0.02f,
+                cipherText = "◆▒░ ※§¤∆ ≈#@%&",
+                postpone = PostponeState(allowed = true, left = 3, max = CapsuleRules.MAX_POSTPONES, preview = emptyMap()),
+            ),
+            animateReveal = false,
+            snackbarHostState = remember { SnackbarHostState() },
+            actions = DetailActions(),
         )
     }
 }
@@ -451,15 +649,16 @@ private fun SealedPreview() {
 @Composable
 private fun OpenedPreview() {
     val now = 1_000_000_000_000L
-    val capsule = Capsule(
-        3, "First week at university", "I don't know anyone yet and the campus feels huge.",
-        "Who are your friends now?", Mood.LOW, now - 200 * Durations.DAY, now - 20 * Durations.DAY,
+    val capsule = previewCapsule(now).copy(
+        title = "First week at university", questionForFuture = "Who are your friends now?", moodAtSealing = Mood.LOW,
         openedAt = now - 19 * Durations.DAY, moodAtOpening = Mood.GOOD, reflection = "I laughed.",
     )
     CapsulaTheme(darkTheme = true) {
         CapsuleDetailContent(
-            uiState = CapsuleDetailUiState.Opened(capsule, 181 * Durations.DAY),
-            animateReveal = false, onBack = {}, onSealBroken = {}, onSaveReflection = { _, _ -> }, onDelete = {},
+            uiState = CapsuleDetailUiState.Opened(capsule, history = emptyList(), sealedForMillis = 181 * Durations.DAY),
+            animateReveal = false,
+            snackbarHostState = remember { SnackbarHostState() },
+            actions = DetailActions(),
         )
     }
 }

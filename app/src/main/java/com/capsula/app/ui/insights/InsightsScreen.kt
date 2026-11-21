@@ -1,5 +1,12 @@
 package com.capsula.app.ui.insights
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import com.capsula.app.data.model.ActivityItem
+import com.capsula.app.ui.components.TrashUndoEffect
+import com.capsula.app.ui.navigation.TrashedCapsule
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,20 +57,36 @@ import com.capsula.app.ui.theme.CapsulaTheme
 fun InsightsScreen(
     onCapsuleClick: (Long) -> Unit,
     onNavigateToTab: (TopLevelDestination) -> Unit,
+    trashedCapsule: TrashedCapsule?,
+    onTrashedCapsuleShown: () -> Unit,
     viewModel: InsightsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    InsightsContent(uiState = uiState, onCapsuleClick = onCapsuleClick, onNavigateToTab = onNavigateToTab)
+    val snackbarHostState = remember { SnackbarHostState() }
+    TrashUndoEffect(
+        trashed = trashedCapsule,
+        snackbarHostState = snackbarHostState,
+        onShown = onTrashedCapsuleShown,
+        onUndo = viewModel::restoreFromTrash,
+    )
+    InsightsContent(
+        uiState = uiState,
+        snackbarHostState = snackbarHostState,
+        onCapsuleClick = onCapsuleClick,
+        onNavigateToTab = onNavigateToTab,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InsightsContent(
     uiState: InsightsUiState,
+    snackbarHostState: SnackbarHostState,
     onCapsuleClick: (Long) -> Unit,
     onNavigateToTab: (TopLevelDestination) -> Unit,
 ) {
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { TopAppBar(title = { Text("Insights") }) },
         bottomBar = { CapsulaBottomBar(selected = TopLevelDestination.INSIGHTS, onSelect = onNavigateToTab) },
     ) { innerPadding ->
@@ -80,14 +103,24 @@ fun InsightsContent(
                     title = "Nothing to look back on yet",
                     body = "Seal your first capsule in the Vault. Patterns in your moods will appear here.",
                 )
-                else -> InsightsBody(insights = insights, onCapsuleClick = onCapsuleClick)
+                else -> InsightsBody(
+                    insights = insights,
+                    recentActivity = uiState.recentActivity,
+                    now = uiState.now,
+                    onCapsuleClick = onCapsuleClick,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun InsightsBody(insights: Insights, onCapsuleClick: (Long) -> Unit) {
+private fun InsightsBody(
+    insights: Insights,
+    recentActivity: List<ActivityItem>,
+    now: Long,
+    onCapsuleClick: (Long) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -99,6 +132,10 @@ private fun InsightsBody(insights: Insights, onCapsuleClick: (Long) -> Unit) {
             StatTile(insights.sealed.toString(), "Sealed", "🔒", Modifier.weight(1f))
             StatTile(insights.ready.toString(), "Ready", "✨", Modifier.weight(1f))
             StatTile(insights.opened.toString(), "Opened", "✉️", Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatTile(insights.drafts.toString(), "Drafts in progress", "📝", Modifier.weight(1f))
+            StatTile(insights.totalPostpones.toString(), "Times postponed", "⏳", Modifier.weight(1f))
         }
 
         val next = insights.nextUnlock
@@ -137,6 +174,24 @@ private fun InsightsBody(insights: Insights, onCapsuleClick: (Long) -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        if (recentActivity.isNotEmpty()) {
+            SectionTitle("Recent activity")
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            ) {
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    recentActivity.forEach { item ->
+                        ActivityRow(
+                            item = item,
+                            now = now,
+                            onClick = { onCapsuleClick(item.event.capsuleId) },
+                        )
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(16.dp))
     }
 }
@@ -169,20 +224,60 @@ private fun NextUnlockCard(capsule: Capsule, remainingMillis: Long, onClick: () 
     }
 }
 
+// Одна строка ленты активности. Капсулы из корзины открыть нельзя, поэтому строка для них не кликабельна.
+@Composable
+private fun ActivityRow(item: ActivityItem, now: Long, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !item.capsuleTrashed, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(item.event.type.emoji, fontSize = 20.sp, modifier = Modifier.width(32.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = item.capsuleTitle,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = item.event.type.label + if (item.capsuleTrashed) " (in trash)" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "${TimeFormatter.humanDuration(now - item.event.timestamp)} ago",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Preview(showSystemUi = true)
 @Composable
 private fun InsightsPreview() {
     val now = 1_000_000_000_000L
     val capsules = listOf(
-        Capsule(1, "A", "...", null, Mood.ANXIOUS, now - 30 * Durations.DAY, now + Durations.HOUR),
         Capsule(
-            2, "B", "...", null, Mood.LOW, now - 200 * Durations.DAY, now - 20 * Durations.DAY,
+            id = 1, title = "A", message = "...", questionForFuture = null, moodAtSealing = Mood.ANXIOUS,
+            createdAt = now - 30 * Durations.DAY, updatedAt = now - 30 * Durations.DAY,
+            sealedAt = now - 30 * Durations.DAY, unlockAt = now + Durations.HOUR,
+        ),
+        Capsule(
+            id = 2, title = "B", message = "...", questionForFuture = null, moodAtSealing = Mood.LOW,
+            createdAt = now - 200 * Durations.DAY, updatedAt = now - 19 * Durations.DAY,
+            sealedAt = now - 200 * Durations.DAY, unlockAt = now - 20 * Durations.DAY,
             openedAt = now - 19 * Durations.DAY, moodAtOpening = Mood.GOOD,
         ),
     )
     CapsulaTheme(darkTheme = true) {
         InsightsContent(
-            uiState = InsightsUiState(isLoading = false, insights = InsightsCalculator.calculate(capsules, now)),
+            uiState = InsightsUiState(isLoading = false, insights = InsightsCalculator.calculate(capsules, now), now = now),
+            snackbarHostState = remember { SnackbarHostState() },
             onCapsuleClick = {},
             onNavigateToTab = {},
         )

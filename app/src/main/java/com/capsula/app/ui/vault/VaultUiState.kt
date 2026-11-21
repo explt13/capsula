@@ -10,6 +10,7 @@ data class CapsuleItemUi(
     val remainingMillis: Long,
     val progress: Float,
     val sinceOpenedMillis: Long?,
+    val sinceEditedMillis: Long,
 )
 
 fun Capsule.toItemUi(now: Long): CapsuleItemUi = CapsuleItemUi(
@@ -18,16 +19,19 @@ fun Capsule.toItemUi(now: Long): CapsuleItemUi = CapsuleItemUi(
     remainingMillis = remainingMillis(now),
     progress = sealProgress(now),
     sinceOpenedMillis = openedAt?.let { now - it },
+    sinceEditedMillis = now - updatedAt,
 )
 
 enum class VaultFilter(val label: String) {
     ALL("All"),
+    DRAFTS("Drafts"),
     SEALED("Sealed"),
     READY("Ready"),
     OPENED("Opened");
 
     fun matches(status: CapsuleStatus): Boolean = when (this) {
         ALL -> true
+        DRAFTS -> status == CapsuleStatus.DRAFT
         SEALED -> status == CapsuleStatus.SEALED
         READY -> status == CapsuleStatus.READY
         OPENED -> status == CapsuleStatus.OPENED
@@ -39,6 +43,8 @@ data class VaultUiState(
     val items: List<CapsuleItemUi> = emptyList(),
     val selectedFilter: VaultFilter = VaultFilter.ALL,
     val counts: Map<VaultFilter, Int> = emptyMap(),
+    // Сколько капсул в корзине: бейдж на иконке корзины.
+    val trashCount: Int = 0,
 ) {
     val readyCount: Int get() = counts[VaultFilter.READY] ?: 0
 }

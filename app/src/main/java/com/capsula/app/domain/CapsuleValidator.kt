@@ -12,12 +12,15 @@ data class CapsuleValidation(
         get() = listOf(titleError, messageError, moodError, unlockError).all { it == null }
 }
 
-// Валидатор для проверки данных новой капсулы.
+// Валидатор данных капсулы. Разные правила для запечатывания, черновика, переименования и ответа.
 object CapsuleValidator {
     const val TITLE_MAX_LENGTH = 60
     const val MESSAGE_MIN_LENGTH = 10
     const val MESSAGE_MAX_LENGTH = 2_000
+    const val QUESTION_MAX_LENGTH = 120
+    const val REPLY_MAX_LENGTH = 1_000
 
+    // Полная проверка перед запечатыванием: после этого письмо уже не изменить.
     fun validate(
         title: String,
         message: String,
@@ -25,11 +28,7 @@ object CapsuleValidator {
         unlockAt: Long?,
         now: Long,
     ): CapsuleValidation = CapsuleValidation(
-        titleError = when {
-            title.isBlank() -> "Give the capsule a title"
-            title.length > TITLE_MAX_LENGTH -> "Keep the title under $TITLE_MAX_LENGTH characters"
-            else -> null
-        },
+        titleError = titleError(title),
         messageError = when {
             message.trim().length < MESSAGE_MIN_LENGTH ->
                 "Write at least $MESSAGE_MIN_LENGTH characters to your future self"
@@ -43,4 +42,26 @@ object CapsuleValidator {
             else -> null
         },
     )
+
+    // Черновик можно сохранить незаконченным: обязателен только заголовок, чтобы найти его в списке.
+    fun validateDraft(title: String, message: String): CapsuleValidation = CapsuleValidation(
+        titleError = titleError(title),
+        messageError = if (message.length > MESSAGE_MAX_LENGTH) {
+            "Letters are limited to $MESSAGE_MAX_LENGTH characters"
+        } else {
+            null
+        },
+    )
+
+    fun titleError(title: String): String? = when {
+        title.isBlank() -> "Give the capsule a title"
+        title.length > TITLE_MAX_LENGTH -> "Keep the title under $TITLE_MAX_LENGTH characters"
+        else -> null
+    }
+
+    fun replyError(mood: Mood?, reply: String): String? = when {
+        mood == null -> "Choose how you feel now"
+        reply.length > REPLY_MAX_LENGTH -> "Replies are limited to $REPLY_MAX_LENGTH characters"
+        else -> null
+    }
 }

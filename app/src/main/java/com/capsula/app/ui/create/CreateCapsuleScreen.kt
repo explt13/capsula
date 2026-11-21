@@ -2,6 +2,7 @@ package com.capsula.app.ui.create
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,6 +33,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SelectableDates
@@ -43,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
@@ -64,14 +68,16 @@ import java.time.LocalDate
 @Composable
 fun CreateCapsuleScreen(
     onBack: () -> Unit,
-    onSealed: (Long) -> Unit,
+    // sealed = true, если письмо запечатано; false, если сохранён черновик.
+    onSaved: (capsuleId: Long, sealed: Boolean) -> Unit,
     viewModel: CreateCapsuleViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
-            is CreateCapsuleEvent.Sealed -> onSealed(event.capsuleId)
+            is CreateCapsuleEvent.Saved -> onSaved(event.capsuleId, event.sealed)
+            CreateCapsuleEvent.NotEditable -> onBack()
         }
     }
 
@@ -85,6 +91,7 @@ fun CreateCapsuleScreen(
         onPresetSelected = viewModel::onPresetSelected,
         onCustomDatePicked = viewModel::onCustomDatePicked,
         onSealClick = viewModel::onSealClick,
+        onSaveDraftClick = viewModel::onSaveDraftClick,
     )
 }
 
@@ -100,6 +107,7 @@ fun CreateCapsuleContent(
     onPresetSelected: (UnlockPreset) -> Unit,
     onCustomDatePicked: (Long) -> Unit,
     onSealClick: () -> Unit,
+    onSaveDraftClick: () -> Unit,
 ) {
     // Pure UI state: dialogs are not business logic, so they live in the composable.
     // rememberSaveable keeps them open after rotation.
@@ -119,7 +127,7 @@ fun CreateCapsuleContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New capsule") },
+                title = { Text(if (uiState.mode == FormMode.EDIT_DRAFT) "Edit draft" else "New capsule") },
                 navigationIcon = {
                     IconButton(onClick = requestExit) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -128,6 +136,15 @@ fun CreateCapsuleContent(
             )
         },
     ) { innerPadding ->
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center,
+            ) { CircularProgressIndicator() }
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -139,8 +156,8 @@ fun CreateCapsuleContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "Write to the person you will be. Once sealed, the letter can't be read " +
-                    "or edited until it opens.",
+                text = "Write to the person you will be. Save it as a draft and come back later, " +
+                    "or seal it: once sealed, the letter can't be read or edited until it opens.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -238,6 +255,18 @@ fun CreateCapsuleContent(
                     Text("Seal capsule")
                 }
             }
+            // Черновик сохраняет текст без даты открытия: его можно дописать и запечатать позже.
+            OutlinedButton(
+                onClick = onSaveDraftClick,
+                enabled = !uiState.isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) {
+                Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (uiState.mode == FormMode.EDIT_DRAFT) "Save draft" else "Save as draft")
+            }
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -269,8 +298,13 @@ fun CreateCapsuleContent(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Discard this letter?") },
-            text = { Text("What you wrote will be lost.") },
+            title = { Text(if (uiState.mode == FormMode.EDIT_DRAFT) "Discard changes?" else "Discard this letter?") },
+            text = {
+                Text(
+                    if (uiState.mode == FormMode.EDIT_DRAFT) "The draft will stay as it was before you opened it."
+                    else "What you wrote will be lost. Save it as a draft to keep it.",
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showDiscardDialog = false
@@ -308,7 +342,7 @@ private fun CreateCapsuleContentPreview() {
                 unlockAtPreview = 1_800_000_000_000L,
             ),
             onBack = {}, onTitleChange = {}, onMessageChange = {}, onQuestionChange = {},
-            onMoodSelected = {}, onPresetSelected = {}, onCustomDatePicked = {}, onSealClick = {},
+            onMoodSelected = {}, onPresetSelected = {}, onCustomDatePicked = {}, onSealClick = {}, onSaveDraftClick = {},
         )
     }
 }

@@ -5,14 +5,27 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.graphics.vector.ImageVector
 
-// Определяет маршруты навигации в приложении Capsula, включая экран Vault, Insights, создание капсулы и детали капсулы.
+// Маршруты навигации приложения. Все строки маршрутов собраны в одном месте.
 sealed class Destination(val route: String) {
     data object Vault : Destination("vault")
     data object Insights : Destination("insights")
+    data object Trash : Destination("trash")
+
+    // Форма нового письма.
     data object Create : Destination("create")
+
+    // Та же форма, но для продолжения черновика. Аргумент читает CreateCapsuleViewModel.
+    data object Edit : Destination("edit/{capsuleId}") {
+        fun createRoute(capsuleId: Long): String = "edit/$capsuleId"
+    }
+
     data object Detail : Destination("capsule/{capsuleId}") {
-        const val ARG_CAPSULE_ID = "capsuleId"
         fun createRoute(capsuleId: Long): String = "capsule/$capsuleId"
+    }
+
+    companion object {
+        // Имя аргумента одинаковое для Detail и Edit.
+        const val ARG_CAPSULE_ID = "capsuleId"
     }
 }
 

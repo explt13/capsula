@@ -14,6 +14,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
@@ -39,6 +46,8 @@ import com.capsula.app.domain.Durations
 import com.capsula.app.ui.AppViewModelProvider
 import com.capsula.app.ui.components.CapsulaBottomBar
 import com.capsula.app.ui.components.EmptyState
+import com.capsula.app.ui.components.TrashUndoEffect
+import com.capsula.app.ui.navigation.TrashedCapsule
 import com.capsula.app.ui.navigation.TopLevelDestination
 import com.capsula.app.ui.theme.CapsulaTheme
 
@@ -47,15 +56,30 @@ import com.capsula.app.ui.theme.CapsulaTheme
 fun VaultScreen(
     onCapsuleClick: (Long) -> Unit,
     onCreateClick: () -> Unit,
+    onTrashClick: () -> Unit,
     onNavigateToTab: (TopLevelDestination) -> Unit,
+    // Капсула, которую только что убрали в корзину на экране деталей (результат навигации).
+    trashedCapsule: TrashedCapsule?,
+    onTrashedCapsuleShown: () -> Unit,
     viewModel: VaultViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    TrashUndoEffect(
+        trashed = trashedCapsule,
+        snackbarHostState = snackbarHostState,
+        onShown = onTrashedCapsuleShown,
+        onUndo = viewModel::restoreFromTrash,
+    )
+
     VaultContent(
         uiState = uiState,
+        snackbarHostState = snackbarHostState,
         onFilterSelected = viewModel::onFilterSelected,
         onCapsuleClick = onCapsuleClick,
         onCreateClick = onCreateClick,
+        onTrashClick = onTrashClick,
         onNavigateToTab = onNavigateToTab,
     )
 }
@@ -65,9 +89,11 @@ fun VaultScreen(
 @Composable
 fun VaultContent(
     uiState: VaultUiState,
+    snackbarHostState: SnackbarHostState,
     onFilterSelected: (VaultFilter) -> Unit,
     onCapsuleClick: (Long) -> Unit,
     onCreateClick: () -> Unit,
+    onTrashClick: () -> Unit,
     onNavigateToTab: (TopLevelDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -75,9 +101,21 @@ fun VaultContent(
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             LargeTopAppBar(
                 title = { Text("Capsula") },
+                actions = {
+                    IconButton(onClick = onTrashClick) {
+                        BadgedBox(
+                            badge = {
+                                if (uiState.trashCount > 0) Badge { Text(uiState.trashCount.toString()) }
+                            },
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Trash, ${uiState.trashCount} items")
+                        }
+                    }
+                },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -88,7 +126,7 @@ fun VaultContent(
             ExtendedFloatingActionButton(
                 onClick = onCreateClick,
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Seal a capsule") },
+                text = { Text("Write a letter") },
             )
         },
     ) { innerPadding ->
@@ -196,14 +234,21 @@ private fun VaultEmptyState(filter: VaultFilter, onCreateClick: () -> Unit) {
             emoji = "📭",
             title = "Your vault is empty",
             body = "Write a letter to your future self. It stays sealed until the date you choose.",
-            actionLabel = "Seal a capsule",
+            actionLabel = "Write a letter",
+            onAction = onCreateClick,
+        )
+        VaultFilter.DRAFTS -> EmptyState(
+            emoji = "📝",
+            title = "No drafts",
+            body = "Not sure what to say yet? Start a letter and save it as a draft.",
+            actionLabel = "Write a letter",
             onAction = onCreateClick,
         )
         VaultFilter.SEALED -> EmptyState(
             emoji = "🔓",
             title = "Nothing is sealed",
             body = "Every capsule has reached its moment. Seal a new one for later.",
-            actionLabel = "Seal a capsule",
+            actionLabel = "Write a letter",
             onAction = onCreateClick,
         )
         VaultFilter.READY -> EmptyState(
@@ -224,9 +269,9 @@ private fun VaultEmptyState(filter: VaultFilter, onCreateClick: () -> Unit) {
 private fun VaultContentPreview() {
     val now = 1_000_000_000_000L
     val items = listOf(
-        Capsule(1, "Hello from last month", "...", null, Mood.ANXIOUS, now - 30 * Durations.DAY, now - Durations.HOUR),
-        Capsule(2, "Right before the demo", "...", null, Mood.GOOD, now - 10 * Durations.MINUTE, now + 3 * Durations.MINUTE),
-        Capsule(3, "Graduation day", "...", null, Mood.GREAT, now - 5 * Durations.DAY, now + 365 * Durations.DAY),
+        previewCapsule(1, "Hello from last month", Mood.ANXIOUS, now - 30 * Durations.DAY, now - Durations.HOUR),
+        previewCapsule(2, "Right before the demo", Mood.GOOD, now - 10 * Durations.MINUTE, now + 3 * Durations.MINUTE),
+        previewCapsule(3, "For my 21st birthday", null, now - Durations.DAY, null),
     ).map { it.toItemUi(now) }
     CapsulaTheme(darkTheme = true) {
         VaultContent(
@@ -235,10 +280,17 @@ private fun VaultContentPreview() {
                 items = items,
                 counts = mapOf(VaultFilter.ALL to 3, VaultFilter.SEALED to 2, VaultFilter.READY to 1),
             ),
+            snackbarHostState = remember { SnackbarHostState() },
             onFilterSelected = {},
             onCapsuleClick = {},
             onCreateClick = {},
+            onTrashClick = {},
             onNavigateToTab = {},
         )
     }
 }
+
+private fun previewCapsule(id: Long, title: String, mood: Mood?, sealedAt: Long, unlockAt: Long?) = Capsule(
+    id = id, title = title, message = "...", questionForFuture = null, moodAtSealing = mood,
+    createdAt = sealedAt, updatedAt = sealedAt, sealedAt = unlockAt?.let { sealedAt }, unlockAt = unlockAt,
+)

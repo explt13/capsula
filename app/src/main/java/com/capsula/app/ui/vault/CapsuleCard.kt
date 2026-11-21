@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -73,6 +74,11 @@ fun CapsuleCard(
                 )
                 Spacer(Modifier.height(4.dp))
                 when (item.status) {
+                    CapsuleStatus.DRAFT -> Text(
+                        text = "Draft, edited ${TimeFormatter.humanDuration(item.sinceEditedMillis)} ago",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     CapsuleStatus.SEALED -> {
                         Text(
                             text = "Opens in ${TimeFormatter.countdown(item.remainingMillis)}",
@@ -103,6 +109,7 @@ fun CapsuleCard(
             }
             Spacer(Modifier.width(12.dp))
             val (icon, tint) = when (item.status) {
+                CapsuleStatus.DRAFT -> Icons.Filled.Edit to MaterialTheme.colorScheme.tertiary
                 CapsuleStatus.SEALED -> Icons.Filled.Lock to MaterialTheme.colorScheme.onSurfaceVariant
                 CapsuleStatus.READY -> Icons.Filled.Star to MaterialTheme.colorScheme.primary
                 CapsuleStatus.OPENED -> Icons.Filled.CheckCircle to MaterialTheme.colorScheme.secondary
@@ -131,7 +138,8 @@ private fun CapsuleCardPreview() {
     val now = 1_000_000_000L
     val capsule = Capsule(
         id = 1, title = "Right before the demo", message = "...", questionForFuture = null,
-        moodAtSealing = Mood.GOOD, createdAt = now - Durations.HOUR, unlockAt = now + Durations.HOUR,
+        moodAtSealing = Mood.GOOD, createdAt = now - Durations.HOUR, updatedAt = now - Durations.HOUR,
+        sealedAt = now - Durations.HOUR, unlockAt = now + Durations.HOUR,
     )
     CapsulaTheme(darkTheme = true) {
         CapsuleCard(item = capsule.toItemUi(now), onClick = {}, modifier = Modifier.padding(16.dp))
